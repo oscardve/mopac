@@ -1,0 +1,152 @@
+---
+title: "Differential Essentiality Analysis"
+author: "MoPAC"
+output:
+  html_document:
+    fig_width: 14
+    fig_height: 7
+    css: styles.css
+params:
+  condition1: 0
+  condition2: 0
+  analyzed: 0
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE,eval=FALSE,message=FALSE,warning=FALSE)
+```
+
+```{r,eval=TRUE}
+
+### Differential essentiality -------------------------------------------------------------------------------
+
+plot.volcano1 <- function(analyzed) {
+  analyzed$`P(sgRNAs)` <- -log10(analyzed$`P(sgRNAs)`)
+  gg <- ggplot2::ggplot(analyzed, ggplot2::aes(Z,`P(sgRNAs)`,group=Gene)) +
+    ggplot2::xlab("Differential essentiality Z score") +
+    ggplot2::ylab("-log10(p-value from sgRNAs)") +
+    ggplot2::geom_vline(xintercept=0,col="black") +
+    ggplot2::geom_hline(yintercept=0,col="black") +
+    ggplot2::geom_point(data=analyzed[analyzed$Category=="Other",],size=1,col="darkgray") +
+    ggplot2::geom_point(data=analyzed[analyzed$Category!="Other",],size=2,pch=21,col="black", ggplot2::aes_string(fill="Category")) +
+    ggplot2::scale_fill_manual(values=c(Other="gray50",Essential="#F8766D",Nonessential="#00BFC4",Nontargeting="blue")) +
+    ggplot2::guides(fill=ggplot2::guide_legend(nrow=2,override.aes=list(size=3,stroke=0.5))) +
+    ggplot2::guides(col=ggplot2::guide_legend(nrow=2,override.aes=list(size=3,stroke=0.5))) +
+    ggplot2::scale_colour_manual(values=c(Deming="black",QQ="purple",Spline="gold",`X=Y`="black")) +
+    ggplot2::theme(
+      text=ggplot2::element_text(face="bold",color="black",size=15),aspect.ratio=1,
+      title=ggplot2::element_text(face="bold",color="black",size=15),
+      strip.text = ggplot2::element_text(face="bold",color="white",size=15),
+      legend.text=ggplot2::element_text(size=15),
+      panel.background=ggplot2::element_blank(),
+      panel.grid.major=ggplot2::element_blank(),
+      panel.grid.minor=ggplot2::element_blank(),
+      panel.border=ggplot2::element_rect(fill=NA,size=1),
+      legend.position="bottom",
+      legend.justification=c(0,0),
+      legend.title=ggplot2::element_blank(),
+      legend.margin=ggplot2::margin(t=-0.3,unit="cm"),
+      strip.background=ggplot2::element_rect(fill="black"),
+      axis.ticks=ggplot2::element_line(size=1,color="black"),
+      axis.text = ggplot2::element_text(size=15,face="bold",color="black"),
+      axis.title=ggplot2::element_text(size=15,face="bold",color="black"),
+      axis.ticks.length=grid::unit(0.15,"cm"))
+  plotly::ggplotly(gg, tooltip=c("Gene"))
+}
+
+
+plot.volcano2 <- function(analyzed) {
+  analyzed$`P(replicates)` <- -log10(analyzed$`P(replicates)`)
+  gg <- ggplot2::ggplot(analyzed, ggplot2::aes(Z,`P(replicates)`,group=Gene)) +
+    ggplot2::xlab("Differential essentiality Z score") +
+    ggplot2::ylab("-log10(p-value from replicates)") +
+    ggplot2::geom_vline(xintercept=0,col="black") +
+    ggplot2::geom_hline(yintercept=0,col="black") +
+    ggplot2::geom_point(data=analyzed[analyzed$Category=="Other",],size=1,col="darkgray") +
+    ggplot2::geom_point(data=analyzed[analyzed$Category!="Other",],size=2,pch=21,col="black", ggplot2::aes_string(fill="Category")) +
+    ggplot2::scale_fill_manual(values=c(Other="gray50",Essential="#F8766D",Nonessential="#00BFC4",Nontargeting="blue")) +
+    ggplot2::guides(fill=ggplot2::guide_legend(nrow=2,override.aes=list(size=3,stroke=0.5))) +
+    ggplot2::guides(col=ggplot2::guide_legend(nrow=2,override.aes=list(size=3,stroke=0.5))) +
+    ggplot2::scale_colour_manual(values=c(Deming="black",QQ="purple",Spline="gold",`X=Y`="black")) +
+    ggplot2::theme(
+      text=ggplot2::element_text(face="bold",color="black",size=15),aspect.ratio=1,
+      title=ggplot2::element_text(face="bold",color="black",size=15),
+      strip.text = ggplot2::element_text(face="bold",color="white",size=15),
+      legend.text=ggplot2::element_text(size=15),
+      panel.background=ggplot2::element_blank(),
+      panel.grid.major=ggplot2::element_blank(),
+      panel.grid.minor=ggplot2::element_blank(),
+      panel.border=ggplot2::element_rect(fill=NA,size=1),
+      legend.position="bottom",
+      legend.justification=c(0,0),
+      legend.title=ggplot2::element_blank(),
+      legend.margin=ggplot2::margin(t=-0.3,unit="cm"),
+      strip.background=ggplot2::element_rect(fill="black"),
+      axis.ticks=ggplot2::element_line(size=1,color="black"),
+      axis.text = ggplot2::element_text(size=15,face="bold",color="black"),
+      axis.title=ggplot2::element_text(size=15,face="bold",color="black"),
+      axis.ticks.length=grid::unit(0.15,"cm"))
+  plotly::ggplotly(gg, tooltip=c("Gene"))
+}
+
+plot.scores <- function(dataset,condition1,condition2) {
+  colnames(dataset)[which(colnames(dataset)==condition1)] <- "X"
+  colnames(dataset)[which(colnames(dataset)==condition2)] <- "Y"
+  gg <- ggplot2::ggplot(dataset,ggplot2::aes_string("X","Y",group="Gene")) +
+    ggplot2::xlim(c(min(dataset[,"X"]),max(dataset[,"X"]))) +
+    ggplot2::ylim(c(min(dataset[,"Y"]),max(dataset[,"Y"]))) +
+    ggplot2::xlab(condition1) +
+    ggplot2::ylab(condition2) +
+    ggplot2::geom_vline(xintercept=0,col="black") +
+    ggplot2::geom_hline(yintercept=0,col="black") +
+    ggplot2::geom_point(data=dataset[dataset$Category=="Other",],size=1,col="darkgray") +
+    ggplot2::geom_point(data=dataset[dataset$Category!="Other",],size=2,pch=21,col="black", ggplot2::aes_string(fill="Category")) +
+    ggplot2::geom_abline(ggplot2::aes(slope=1,intercept=0,col="X=Y"),linetype="dashed",size=1) +
+    ggplot2::scale_fill_manual(values=c(Other="gray50",Essential="#F8766D",Nonessential="#00BFC4",Nontargeting="blue")) +
+    ggplot2::guides(fill=ggplot2::guide_legend(nrow=2,override.aes=list(size=3,stroke=0.5))) +
+    ggplot2::guides(col=ggplot2::guide_legend(nrow=2,override.aes=list(size=3,stroke=0.5))) +
+    ggplot2::scale_colour_manual(values=c(Deming="black",QQ="purple",Spline="gold",`X=Y`="black")) +
+    ggplot2::theme(
+      text=ggplot2::element_text(face="bold",color="black",size=15),aspect.ratio=1,
+      title=ggplot2::element_text(face="bold",color="black",size=15),
+      strip.text = ggplot2::element_text(face="bold",color="white",size=15),
+      legend.text=ggplot2::element_text(size=15),
+      panel.background=ggplot2::element_blank(),
+      panel.grid.major=ggplot2::element_blank(),
+      panel.grid.minor=ggplot2::element_blank(),
+      panel.border=ggplot2::element_rect(fill=NA,size=1),
+      legend.position="bottom",
+      legend.justification=c(0,0),
+      legend.title=ggplot2::element_blank(),
+      legend.margin=ggplot2::margin(t=-0.3,unit="cm"),
+      strip.background=ggplot2::element_rect(fill="black"),
+      axis.ticks=ggplot2::element_line(size=1,color="black"),
+      axis.text = ggplot2::element_text(size=15,face="bold",color="black"),
+      axis.title=ggplot2::element_text(size=15,face="bold",color="black"),
+      axis.ticks.length=grid::unit(0.15,"cm"))
+  plotly::ggplotly(gg, tooltip=c("Gene"))
+}
+
+condition1 <- params$condition1
+condition2 <- params$condition2
+# scored <- params$scored
+analyzed <- params$analyzed
+if(!"P(replicates)"%in%colnames(analyzed)) {
+  analyzed$`P(replicates)` <- 2*pnorm(-abs(analyzed$Z))
+  # analyzed$FDR <- p.adjust(analyzed$P,method="fdr")
+}
+if(!"Category"%in%colnames(analyzed)) analyzed$Category <- "Other"
+```
+
+## Gene essentiality scores for selected conditions after normalization
+
+```{r,eval=TRUE,fig.width=14,fig.height=7}
+plot.scores(analyzed,condition1,condition2)
+```
+
+## Differential gene essentiality scores for selected conditions
+
+```{r,eval=TRUE,fig.width=14,fig.height=7}
+plot.volcano1(analyzed)
+plot.volcano2(analyzed)
+```

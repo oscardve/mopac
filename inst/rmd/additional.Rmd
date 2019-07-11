@@ -1,0 +1,513 @@
+---
+title: "Additional information"
+author: "Oscar Villarreal"
+date: "5/16/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE,eval=FALSE)
+```
+
+# Evidence:
+
+```{r}
+folded <- dfS1[dfS1$Category=="Essential",c(1:8)]
+folded <- folded[folded$Gene%in%c("ARCN1","CCT3","CCT4","CCT7","CDK17","CHMP2A","CLTC","COPB1","COPZ1"),]
+folded <- folded[order(folded$Gene,folded$sgRNA),]
+Nsgrna <- table(folded$Gene) #find number of sgrnas per gene
+Ngene <- table(Nsgrna) #how many genes have 1 sgRNA, how many have 2, how many have 3, etc.
+if(length(Ngene)>1) stop("Not all genes have the same amount of guides!")
+# Sort sgRNA values:
+sorted0 <- split(as.matrix(folded[,-which(names(folded)%in%c("sgRNA","Gene","Category"))]),folded$Gene)
+sorted <- as.data.frame(do.call(rbind,lapply(sorted0,function(x) get_sorted1(x,Nsgrna[1]))))
+# Split into ranks:
+xijk <- split(sorted,rep(1:Nsgrna[1],times=(nrow(sorted)/Nsgrna[1])))
+# Bind into a 3D tensor (put samples in 1st dimension, genes in 2nd and sgRNA in 3rd):
+tensor <- array(unlist(xijk), dim = c(nrow(xijk[[1]]), ncol(xijk[[1]]), length(xijk)))
+tensor <- aperm(tensor, c(2,1,3))
+dimnames(tensor)[[1]] <- as.list(names(folded)[-which(names(folded)%in%c("sgRNA","Gene","Category"))])
+dimnames(tensor)[[2]] <- as.list(unique(folded$Gene))
+
+
+
+xpA <- read.table("Pos_A375_RepA.txt")
+xpB <- read.table("Pos_A375_RepB.txt")
+xpC <- read.table("Pos_A375_RepC.txt")
+xpD <- read.table("Pos_A375_RepD.txt")
+xp <- list(`1`=cbind(xpA[,1],xpB[,1],xpC[,1],xpD[,1]),
+           `2`=cbind(xpA[,2],xpB[,2],xpC[,2],xpD[,2]),
+           `3`=cbind(xpA[,3],xpB[,3],xpC[,3],xpD[,3]),
+           `4`=cbind(xpA[,4],xpB[,4],xpC[,4],xpD[,4]),
+           `5`=cbind(xpA[,5],xpB[,5],xpC[,5],xpD[,5]),
+           `6`=cbind(xpA[,6],xpB[,6],xpC[,6],xpD[,6]))
+xp <- array(unlist(xp), dim = c(nrow(xp[[1]]), ncol(xp[[1]]), length(xp)))
+xp <- aperm(xp, c(2,1,3))
+dimnames(xp)[[1]] <- as.list(c("A","B","C","D"))
+
+
+xnA <- read.table("Neg_A375_RepA.txt")
+xnB <- read.table("Neg_A375_RepB.txt")
+xnC <- read.table("Neg_A375_RepC.txt")
+xnD <- read.table("Neg_A375_RepD.txt")
+xn <- list(`1`=cbind(xnA[,1],xnB[,1],xnC[,1],xnD[,1]),
+           `2`=cbind(xnA[,2],xnB[,2],xnC[,2],xnD[,2]),
+           `3`=cbind(xnA[,3],xnB[,3],xnC[,3],xnD[,3]),
+           `4`=cbind(xnA[,4],xnB[,4],xnC[,4],xnD[,4]),
+           `5`=cbind(xnA[,5],xnB[,5],xnC[,5],xnD[,5]),
+           `6`=cbind(xnA[,6],xnB[,6],xnC[,6],xnD[,6]))
+xn <- array(unlist(xn), dim = c(nrow(xn[[1]]), ncol(xn[[1]]), length(xn)))
+xn <- aperm(xn, c(2,1,3))
+dimnames(xn)[[1]] <- as.list(c("A","B","C","D"))
+
+
+solp = do.optimize(xp,xn)
+
+
+filtered.essential <- read.table("~/paper_feb20/cbp30_mopac_selftrained/essential.txt",header=T,stringsAsFactors=F)[,1]
+filtered.nonessential <- read.table("~/paper_feb20/cbp30_mopac_selftrained/nonessential.txt",header=T,stringsAsFactors=F)[,1]
+counts <- read.table("counts.txt",header=T)
+counts$Category[counts$Category=="Essential" & !counts$Gene%in%filtered.essential] <- "Other"
+counts$Category[counts$Category=="Nonessential" & !counts$Gene%in%filtered.nonessential] <- "Other"
+counts <- counts[order(counts$Category),]
+write.table(counts,"counts.txt",quote=F,sep='\t',row.names=F,col.names=T)
+counts <- counts[,c(c("sgRNA","Gene","Category","Day0A.A","DMSO.A","CBP30.A","Day0B.B","DMSO.B","CBP30.B","Day0C.C","DMSO.C","CBP30.C"))]
+
+```
+
+# R package preparation and installation:
+
+```{r}
+## CREATE PACKAGE
+
+### Empty package:
+File->New project->New directory->R package
+
+### Save data to the data/ directory automatically:
+devtools::use_data(data1, overwrite=T)
+
+## RCPP
+
+### After creating the package, run this:
+devtools::use_rcpp()
+
+### Then add the following lines (where “packageName” is the name of your package) in any R script which is inside the R/ directory (e.g. main.R):
+#' @useDynLib packageName
+#' @importFrom Rcpp sourceCpp
+NULL
+
+## Edit the NAMESPACE file:
+
+### First run the following (if it complains, make sure the working directory is set to the package directory, delete the NAMESPACE file and retry):
+devtools::document()
+
+### Add the following line to the NAMESPACE file if it is missing (otherwise the files in the R/ directory will not load):
+exportPattern("^[[:alpha:]]+")
+
+### Also add the following lines if they are missing:
+importFrom(Rcpp,sourceCpp)
+import(Rcpp)
+useDynLib(packageName)
+
+## Edit the DESCRIPTION file:
+
+### Make sure it contains the following lines:
+LinkingTo: Rcpp
+Imports: Rcpp
+
+### Edit the cpp codes in the /src directory. There are two ways of calling cpp code from an R script:
+http://dirk.eddelbuettel.com/code/rcpp/Rcpp-modules.pdf 
+
+# The first way (harder) is to use the language of Rcpp, so that it is automatically exported to any R script, for example in the following program:
+
+#include <Rcpp.h>
+using namespace Rcpp;
+// [[Rcpp::export]]
+NumericMatrix calc_distances(NumericMatrix pos, NumericMatrix neg) {
+  int npos=pos.nrow(), nneg=neg.nrow(), nday0=pos.ncol();
+  NumericMatrix out(npos,nneg);
+  for(int i=0; i<npos; i++) //Rcout<<i<<std::endl;
+    for(int j=0; j<nneg; j++)
+      for(int k=0; k<nday0; k++)
+        out(i,j) += pow(pos(i,k)-neg(j,k), 2);
+  return out;
+}
+
+# The second way (easier) is to create an Rcpp module which translates specific functions to the language of Rcpp automatically (i.e. the function which you can call from any R script), for example in the following program:
+
+#include<math.h>
+double test(double x, double y) {
+  return sqrt( x*x + y*y );
+}
+#include <Rcpp.h>
+RCPP_MODULE(mod) {
+  using namespace Rcpp;
+  Rcpp::function("test",&test);
+}
+
+# If you use the second way, you need to add the following line to any R script which is inside the R/ directory (e.g. main.R):
+loadModule("mod",TRUE)
+
+# If C++11 does not work, run this command before building the package:
+Sys.setenv("PKG_CXXFLAGS"="-std=c++11")
+# In order to use C++11 code in a package, the package’s "src/Makevars"" file (or src/Makevars.win on Windows) should include the line (http://web.mit.edu/r_v3.3.1/R-exts.pdf):
+CXX_STD = CXX11
+
+# To generate the manual annotation files of all functions:
+roxygen2::roxygenise()
+
+# Pandoc must be installed if you want to generate html or pdf reports. Rstudio already comes with pandoc installed; but if you want to use MoPAC in R outside of Rstudio, you need to either install pandoc (sudo yum install pandoc) or set the path to the Rstudio installation of pandoc:
+Sys.getenv("RSTUDIO_PANDOC") #run this inside Rstudio to get pandoc installation of Rstudio
+Sys.setenv(RSTUDIO_PANDOC="/usr/lib/rstudio-server/bin/pandoc") #run this in R before calling MoPAC
+
+# To add data to the package:
+devtools::use_data(data1, overwrite=T)
+# then write the documentation of each dataset in the file R/data.R
+# then, to use the data inside MoPAC functions: MoPAC::essentials
+
+# In the terminal, where the main package directory is located (i.e. at ../MoPAC) run:
+R CMD check MoPAC & disown
+# This will create a directory called "MoPAC.Rcheck" containing the manual pdf.
+# To avoid an example from running:
+#' \dontrun{
+#' }
+
+# Required R packages:
+install.packages("Rcpp")
+install.packages("gtools")
+install.packages("stringr")
+install.packages("openxlsx")
+install.packages("tensorA")
+install.packages("ineq")
+install.packages("reshape2")
+install.packages("plyr")
+install.packages("ggplot2")
+install.packages("gplots")
+install.packages("ggrepel")
+install.packages("gridExtra")
+install.packages("knitr")
+install.packages("rmarkdown")
+install.packages("shiny")
+install.packages("shinyBS")
+install.packages("shinythemes")
+install.packages("shinyFiles")
+install.packages("DT")
+install.packages("visNetwork")
+install.packages("sqldf")
+install.packages("rhandsontable")
+install.packages("neat")
+install.packages("igraph")
+# base: utils, stats, tools, grid
+
+# Optional R packages:
+install.packages("plotly")
+source("https://bioconductor.org/biocLite.R")
+biocLite("STRINGdb")
+# These packages might require additional software in order to be installed, which is why I did not put them in the required list:
+sudo yum install libpng-devel
+sudo yum install openssl-devel
+sudo yum install libcurl-devel
+
+# Optional software for pdf rendering:
+sudo yum install pandoc
+
+# Install MoPAC:
+install.packages("/home/oscar/Downloads/MoPAC_0.1.0.tar.gz", repos = NULL, type="source")
+sudo su - -c "R -e \"install.packages('/home/ovillarreal/MoPAC_0.2.0.tar.gz',repos=NULL,type='source')\""
+sudo su odvillarreal -c "R -e \"install.packages('/Users/odvillarreal/Documents/feb4/MoPAC_0.3.0.tar.gz',repos=NULL,type='source')\""
+
+sudo su - -c "R -e \"install.packages('/home/odve/Downloads/MoPAC_0.2.0.tar.gz',repos=NULL,type='source')\""
+
+sudo su odve -c "R -e \"install.packages('/home/odve/Downloads/MoPAC_0.2.0.tar.gz',repos=NULL,type='source')\""
+
+# Debugging:
+library(Rcpp)
+library(MoPAC)
+source("~/MoPAC/R/plotting.R")
+source("~/MoPAC/R/regression.R")
+source("~/MoPAC/R/optimization.R")
+source("~/MoPAC/R/pseudocount.R")
+source("~/MoPAC/R/scoring.R")
+sourceCpp("~/MoPAC/src/sort.cpp")
+sourceCpp("~/MoPAC/src/rra2tail.cpp")
+sourceCpp("~/MoPAC/src/quantile.cpp")
+
+## FASTQ example:
+reads1 <- read.fastq(id="test1",fastq="/home/data/crispr/liang/MDACCSPNGS-LZ-436/fastq_day18",library="/home/ovillarreal/iEpiC_library_anno.txt",
+                     spacer_start=0,spacer_length=19,reverse=TRUE,complement=TRUE)
+reads2 <- read.counts(id="test1")
+
+## Example I. Supplying the path of each file:
+## It may be in .xlsx, .csv or tab-separted format:
+utils::write.table(MoPAC::dang_cck81, "dataset.txt", sep='\t', quote=FALSE, row.names=FALSE)
+utils::write.table(MoPAC::sgRNA_library, "library.txt", sep='\t', quote=FALSE, row.names=FALSE)
+reads <- read.counts(id="test2", counts="dataset.txt", library="library.txt")
+## At this point you may fill out the annotation file, or supply a filled-out data frame:
+annotation <- reads$Annotation
+annotation$Condition <- c("Plasmid0","Plasmid1",rep("DANG",4),rep("CCK81",3))
+annotation$Replicate <- c("A","A","A","B","C","D","A","B","C")
+annotation$Control <- c(NA,"",rep("Plasmid0",4),rep("Plasmid1",3))
+qc <- quality.control(id="test2",annotation=annotation,report = TRUE)
+
+
+## Example II. Supplying a table of read counts as a data frame:
+## It must include a column named "sgRNA":
+reads <- read.counts(id="test2", counts=MoPAC::dang_cck81, library=MoPAC::sgRNA_library)
+annotation <- reads$Annotation
+annotation$Condition <- c("Plasmid0","Plasmid1",rep("DANG",4),rep("CCK81",3))
+annotation$Replicate <- c("A","A","A","B","C","D","A","B","C")
+annotation$Control <- c(NA,"",rep("Plasmid0",4),rep("Plasmid1",3))
+qc <- quality.control(counts=reads$Counts,annotation=annotation)
+
+## Example II. Supplying the path of each file:
+## It may be in .xlsx, .csv or tab-separted format:
+utils::write.table(MoPAC::dang_cck81, "dataset.txt", sep='\t', quote=FALSE, row.names=FALSE)
+utils::write.table(MoPAC::sgRNA_library, "library.txt", sep='\t', quote=FALSE, row.names=FALSE)
+reads <- read.counts(id="test2", counts="dataset.txt", library="library.txt")
+## Example III. Without using an identifier to generate output:
+reads <- read.counts(counts = MoPAC::dang_cck81, library=MoPAC::sgRNA_library)
+qc <- 
+
+# Store datasets:
+su8686_t47d_annotation <- read.csv("~/test/aug24/annotation.csv")
+devtools::use_data(su8686_t47d_annotation, overwrite=T)
+dang_cck81_annotation <- read.csv("~/test/aug24_2/annotation.csv")
+devtools::use_data(dang_cck81_annotation, overwrite=T)
+thp1_ags <- counts[,c("sgRNA","pDNA1","pDNA3","THP1AVANA4RepAp5","THP1AVANA4RepBp5","THP1AVANA4RepCp5","AGS311Cas9RepAp6","AGS311Cas9RepBp6")]
+devtools::use_data(thp1_ags, overwrite=T)
+thp1_ags_annotation <- read.csv("~/test/aug24_2/annotation.csv")
+devtools::use_data(thp1_ags_annotation, overwrite=T)
+
+# Notes: 
+# a) If there are nonessential genes containing many more sgRNAs than the mode, they will be splitted into several smaller genes of size equal to the mode before the regression. At this point, the average of all the nonessential genes including the splitted pieces will be exactly zero. However, after the regression the splitted pieces are averaged together and because of this the mean of the nonessentials will not be exactly zero anymore.
+```
+
+# STRINGdb datasets pre-processing (takes more than two minutes to do this 2:10):
+
+```{r}
+# a) get_aliases():
+proteinsDf <- read.table("~/tools/neat/9606__proteins.tsv", 
+  sep = "\t", header = TRUE,stringsAsFactors = FALSE, fill = TRUE, quote="")
+proteins = subset(proteinsDf, select = c("protein_external_id", 
+    "preferred_name", "protein_size", "annotation"))
+aliasDf <- read.table("~/tools/neat/9606__protein_aliases_tf.tsv",
+  sep="\t",header=TRUE,quote="",stringsAsFactors=FALSE,fill=TRUE)
+aliasDf = renameColDf(aliasDf, "protein_id", "STRING_id")
+aliasDf = subset(aliasDf, select = c("STRING_id", "alias"))
+pr1 = data.frame(STRING_id = proteins$protein_external_id,
+  alias = proteins$preferred_name, stringsAsFactors = FALSE)
+pr2 = data.frame(STRING_id = proteins$protein_external_id,
+  alias = proteins$protein_external_id, stringsAsFactors = FALSE)
+pr3 = data.frame(STRING_id = proteins$protein_external_id,
+  alias = unlist(strsplit(proteins$protein_external_id,
+  "\\."))[seq(from = 2, to = 2 * nrow(proteins), by = 2)],stringsAsFactors = FALSE)
+aliasDf = subset(aliasDf, !(toupper(iconv(alias, "WINDOWS-1252", 
+  "UTF-8")) %in% toupper(proteins$preferred_name)) & 
+  !(toupper(iconv(alias, "WINDOWS-1252", "UTF-8")) %in% 
+      toupper(proteins$protein_external_id)) & !(toupper(iconv(alias, 
+  "WINDOWS-1252", "UTF-8")) %in% toupper(unlist(strsplit(proteins$protein_external_id, 
+  "\\."))[seq(from = 2, to = 2 * nrow(proteins), by = 2)])))
+aliasDf2 <- rbind(pr1, pr2, pr3, aliasDf)
+# b) load():
+library(igraph)
+PPI <- read.table("~/tools/neat/9606__protein_links.tsv", 
+  sep = " ", header = TRUE, stringsAsFactors = FALSE, fill = TRUE)
+# PPIselected <- PPI[PPI$combined_score >= 700,]
+# graph = graph.data.frame(PPIselected, FALSE)
+# c) get_enrichment():
+ann = read.table("~/tools/neat/annotations_9606.tsv",
+  sep="\t",stringsAsFactors=FALSE,quote="",fill=TRUE,header=FALSE)
+ann = renameColDf(ann, "V1", "STRING_id")
+ann = renameColDf(ann, "V2", "term_id")
+ann = renameColDf(ann, "V3", "category")
+ann <- unique(renameColDf(ann, "V4", "type"))
+annDesc <- read.table("~/tools/neat/annotations_description.tsv", sep = "\t", 
+            header = TRUE, quote = "", fill = TRUE, stringsAsFactors = FALSE)
+
+stringdb_9606 <- list(Proteins=proteins,Aliases=aliasDf2,Annotation=ann,Description=annDesc,PPI=PPI)
+# stringdb_9606 <- list(Proteins=proteins,Aliases=aliasDf2,Annotation=ann,Description=annDesc,Graph=graph)
+devtools::use_data(stringdb_9606, overwrite=T)
+```
+
+# Generation of empirical weights from dataset-averaged values:
+
+```{r,fig.width=10,fig.height=5}
+w10 <- rowMeans(apply(matrix(NA,nrow=100000,ncol=10),1,function(x){
+  x[sort(sample(1:10,4))] <- c(0.2792423,0.3346092,0.2440308,0.1421177)
+  return(x)}),na.rm=TRUE)
+w9 <- rowMeans(apply(matrix(0,nrow=100000,ncol=9),1,function(x){
+  x[sort(sample(1:9,4))] <- c(0.2792423,0.3346092,0.2440308,0.1421177)
+  x[x==0] <- NA
+  return(x)
+}),na.rm=TRUE)
+w8 <- rowMeans(apply(matrix(0,nrow=100000,ncol=8),1,function(x){
+  x[sort(sample(1:8,4))] <- c(0.2792423,0.3346092,0.2440308,0.1421177)
+  x[x==0] <- NA
+  return(x)
+}),na.rm=TRUE)
+w7 <- rowMeans(apply(matrix(0,nrow=100000,ncol=7),1,function(x){
+  x[sort(sample(1:7,4))] <- c(0.2792423,0.3346092,0.2440308,0.1421177)
+  x[x==0] <- NA
+  return(x)
+}),na.rm=TRUE)
+w6 <- rowMeans(apply(matrix(0,nrow=100000,ncol=6),1,function(x){
+  x[sort(sample(1:6,4))] <- c(0.2792423,0.3346092,0.2440308,0.1421177)
+  x[x==0] <- NA
+  return(x)
+}),na.rm=TRUE)
+w5 <- rowMeans(apply(matrix(0,nrow=100000,ncol=5),1,function(x){
+  x[sort(sample(1:5,4))] <- c(0.2792423,0.3346092,0.2440308,0.1421177)
+  x[x==0] <- NA
+  return(x)
+}),na.rm=TRUE)
+w4 <- c(0.2792423,0.3346092,0.2440308,0.1421177)
+
+w10 <- c(0.2792423,0.2978576,0.3038050,0.2996329,0.2864142,0.2658323,0.2401169,0.2093034,0.1763553,0.1421177)
+w9 <- c(0.2792423,0.2999200,0.3051250,0.2967544,0.2785473,0.2503667,0.2172760,0.1802932,0.1421177)
+w8 <- c(0.2792423,0.3028417,0.3059574,0.2919458,0.2646420,0.2278163,0.1852644,0.1421177)
+w7 <- c(0.2792423,0.3069282,0.3055136,0.2813066,0.2413848,0.1929482,0.1421177)
+w6 <- c(0.2792423,0.3124171,0.3020701,0.2610669,0.2033731,0.1421177)
+w5 <- c(0.2792423,0.3208447,0.2892724,0.2184558,0.1421177)
+w4 <- c(0.2792423,0.3346092,0.2440308,0.1421177)
+w3 <- c(0.4746435,0.3780770,0.1472794)
+w2 <- c(0.6851414,0.3148586)
+
+
+weights <- as.data.frame(rbind(
+  cbind(Size=10,Rank=1:10,Weight=w10/sum(w10)),
+  cbind(Size=9,Rank=1:9,Weight=w9/sum(w9)),
+  cbind(Size=8,Rank=1:8,Weight=w8/sum(w8)),
+  cbind(Size=7,Rank=1:7,Weight=w7/sum(w7)),
+  cbind(Size=6,Rank=1:6,Weight=w6/sum(w6)),
+  cbind(Size=5,Rank=1:5,Weight=w5/sum(w5)),
+  cbind(Size=4,Rank=1:4,Weight=w4/sum(w4)),
+  cbind(Size=3,Rank=1:3,Weight=w3/sum(w3)),
+  cbind(Size=2,Rank=1:2,Weight=w2/sum(w2))))
+weights$Rank <- as.factor(weights$Rank)
+ggplot(weights,aes(Rank,Weight)) + 
+    geom_bar(stat="identity") + 
+    facet_wrap(~Size,nrow=1,scales="free") +
+    # ggtitle("B") +
+    theme(text=element_text(face="bold",color="black",size=12),
+      title=element_text(face="bold",color="black",size=12),
+      strip.text = element_text(face="bold",color="white",size=12),
+      legend.text=element_text(size=12),
+      panel.background=element_blank(),
+      panel.grid.major=element_blank(),
+      panel.grid.minor=element_blank(),
+      panel.border=element_rect(fill=NA,size=1),
+      legend.position="bottom",
+      legend.justification=c(0,0),
+      legend.title=element_blank(),
+      strip.background=element_rect(fill="black"),
+      axis.ticks=element_line(size=1,color="black"),
+      axis.text = element_text(size=12,face="bold",color="black"),
+      axis.text.x=element_text(size=12),
+      axis.title=element_text(size=12,face="bold",color="black"),
+      axis.ticks.length=unit(0.15,"cm")
+)
+ggsave("empirical_weights.tiff",width=15,height=5)
+```
+
+# Suggested lists of essential and nonessential genes.
+
+Source:  Hart, T., Brown, K. R., Sircoulomb, F., Rottapel, R. & Moffat, J. Measuring error rates in genomic perturbation screens: gold standards for human functional genomics. Mol. Syst. Biol. 10, (2014). http://msb.embopress.org/content/10/7/733
+
+```{r}
+lists <- openxlsx::read.xlsx("msb0010-0733-sd1.xlsx") #Hart et al.
+essential0 <- as.character(na.omit(lists$`ConstitutiveCoreEssentials(CCE)`)) #core-essentials
+nonessential0 <- as.character(na.omit(lists$`Nonessential.Genes.(NE)`)) #non-essentials
+
+for(j in seq(from=1,to=927,by=15)){
+  essential1 <- ""
+  for(i in essential0){
+    essential1 <- paste0(essential1,"'",i,"',")
+  }
+  print(essential1)  
+}
+
+essential <- c(
+  'ALYREF','AQR','ARCN1','BRIX1','C12orf66','CCT3','CCT4','CCT6A','CCT7','CCT8','CDC40','CDC5L','CDK17','CHD4','CHMP2A',
+  'CLTC','COPA','COPB1','COPS2','COPS4','COPS6','COPS8','COPZ1','CSE1L','CTDNEP1','DDB1','DDX18','DDX46','DDX49','DDX51',
+  'DNM2','DYNC1H1','DYNC1I2','EEF2','EFTUD2','EIF1AX','EIF2B4','EIF2S2','EIF3A','EIF3B','EIF3C','EIF3D','EIF3F','EIF3G','EIF3I',
+  'EIF4A3','EIF5B','ERH','ETF1','EXOSC10','FTSJ3','GAR1','GNL3','GTF3C4','HAUS7','HEATR1','HNRNPC','HNRNPK','HNRNPM','HNRNPU',
+  'HSPA9','HSPE1','INTS9','KARS','KPNB1','LIAS','LSM4','LSM6','MRPS31','MSANTD3','NACA','NAPA','NAPG','NEDD8','NHP2L1',
+  'NUDT21','NUP133','NUP205','NUP54','NUP93','NUP98','NXF1','PABPN1','PAPOLA','PFDN2','PHB','PHB2','PHF5A','POLR2D','POLR2F',
+  'POLR2I','PPP2R1A','PRKAB2','PRPF18','PRPF19','PRPF3','PRPF31','PRPF38A','PRPF8','PRUNE','PSMA1','PSMA2','PSMA3','PSMA6','PSMB2',
+  'PSMB3','PSMC1','PSMC2','PSMC4','PSMD1','PSMD11','PSMD7','QARS','RAN','RBM17','RILPL2','RPA1','RPA2','RPL10','RPL10A',
+  'RPL11','RPL12','RPL13','RPL13A','RPL14','RPL18','RPL18A','RPL19','RPL23A','RPL24','RPL26','RPL27','RPL3','RPL30','RPL31',
+  'RPL32','RPL34','RPL35','RPL35A','RPL36','RPL37','RPL37A','RPL38','RPL4','RPL5','RPL6','RPL7','RPL7A','RPLP0','RPLP2',
+  'RPN2','RPS11','RPS13','RPS14','RPS15','RPS15A','RPS17','RPS18','RPS19','RPS20','RPS24','RPS26','RPS27A','RPS3','RPS3A',
+  'RPS4X','RPS5','RPS6','RPS7','RPS8','RPS9','RPSA','RRM1','RUVBL1','RUVBL2','SDAD1','SF3A1','SF3A2','SF3B1','SF3B2',
+  'SF3B3','SF3B4','SF3B5','SFPQ','SHFM1','SMC3','SNRNP200','SNRNP27','SNRPD1','SNRPD2','SRCAP','SRFBP1','SRSF1','SRSF3','SUPT5H',
+  'SUPT6H','SUPV3L1','TFIP11','THOP1','TIMM10','TSTA3','TUBA1B','TUBGCP2','U2AF1','U2AF2','UBA1','USP39','VCP','WDR12','WDR60',
+  'WDR61','XAB2','XPO1','YY1','ZBTB48','ZC3H13','ZNF207')
+nonessential <- c(
+  'ABCG8','ACCSL','ACTL7A','ACTL7B','ACTL9','ACTRT1','ADAD1','ADAM18','ADAM2','ADAM20','ADAM30','ADH7','AFM','AICDA','AIPL1',
+  'ALPI','ALPPL2','ALX3','AMELX','ANKRD30A','ANKRD60','ANTXRL','APOA4','APOBEC1','APOF','AQP12A','AQP8','ARGFX','ART1','ASB17',
+  'ASIC5','ASZ1','ATOH1','ATP4B','ATP6V1G3','AWAT1','AWAT2','B3GNT6','BANF2','BARHL1','BEND2','BHLHE23','BIRC8','BMP10','BMP15',
+  'BPIFA1','BPIFA3','BPIFB3','BPIFB6','BPIFC','BPY2','BRDT','BSND','C10orf113','C10orf120','C10orf53','C11orf40','C12orf40','C14orf183','C15orf55',
+  'C16orf78','C17orf102','C17orf78','C18orf26','C19orf45','C1orf146','C20orf173','C20orf203','C20orf79','C2orf57','C2orf61','C2orf71','C2orf83','C3orf30','C4orf40',
+  'C5orf20','C6orf10','C7orf66','C7orf71','C8A','C8B','C8orf17','C8orf86','C9orf53','CABP2','CABP5','CABS1','CACNG2','CACNG3','CACNG5',
+  'CATSPER4','CCDC155','CCDC172','CCDC83','CCKAR','CCL1','CCT8L2','CD200R1L','CDCP2','CDX2','CDX4','CDY1','CDY1B','CDY2A','CDY2B',
+  'CEACAM7','CELA2A','CELA3A','CELA3B','CER1','CETN1','CFHR2','CFHR5','CHAT','CHRNA6','CHRNB3','CLCA1','CLDN17','CLEC2A','CLEC3A',
+  'CLEC6A','CLRN1','CNBD1','CNGA2','CNGB3','CNPY1','CNTNAP5','COL20A1','COX7B2','CPXCR1','CRNN','CRX','CRYGB','CSH1','CSHL1',
+  'CSN2','CSN3','CST11','CST4','CST5','CST8','CST9','CST9L','CSTL1','CT45A2','CT45A4','CT45A5','CT47A11','CTCFL','CTRB1',
+  'CXorf1','CXorf66','CYLC2','CYP11B1','CYP11B2','CYP26C1','CYP2A13','CYP2C19','CYP4A22','CYP4F8','CYP7A1','DAZ1','DAZ2','DAZ3','DAZ4',
+  'DAZL','DCAF4L2','DCAF8L1','DDI1','DDX4','DEFA5','DEFA6','DEFB103B','DEFB104A','DEFB106A','DEFB107A','DEFB118','DEFB123','DEFB126','DEFB127',
+  'DEFB129','DGAT2L6','DGKK','DIRC1','DMP1','DMRT1','DMRTB1','DMRTC2','DPCR1','DPRX','DRD3','DRGX','DSCR4','DSG4','DSPP',
+  'DTX2','DUSP21','DUX4','DUX4L7','DUXA','EFCAB3','EGR4','ENTHD1','ESX1','EVX1','F13B','F9','FABP2','FAM106A','FAM47A',
+  'FAM47B','FAM47C','FAM71A','FAM71B','FAM71C','FAM75A7','FAM75D1','FCRL4','FEZF1','FEZF2','FFAR1','FGF3','FGF4','FGF6','FIGLA',
+  'FLG2','FMR1NB','FNDC7','FNDC9','FOXB1','FOXB2','FOXD4L3','FOXD4L4','FOXE3','FOXN1','FOXR1','FRG2','FRMD7','FSCB','FUT5',
+  'FUT9','G6PC','GABRA1','GABRA6','GAGE1','GAGE2C','GALNTL5','GALR1','GALR3','GBP7','GCG','GCM2','GDF2','GFRA4','GFRAL',
+  'GH2','GHRH','GHSR','GIF','GJA10','GJA8','GK2','GKN2','GLRA1','GLRA2','GLT6D1','GML','GOLGA6L2','GOT1L1','GPR101',
+  'GPR111','GPR119','GPR128','GPR139','GPR144','GPR148','GPR151','GPR152','GPR26','GPR31','GPR32','GPR45','GPR50','GPR52','GPR78',
+  'GPRC6A','GPX5','GPX6','GRK1','GRM4','GRM5','GRM6','GSC2','GSTA5','GSX1','GSX2','GUCA2A','GUCY2F','H1FOO','H2BFM',
+  'H2BFWT','HAO1','HCRTR2','HDGFL1','HHLA1','HIST1H2AA','HIST1H2BA','HIST1H4G','HMX1','HOXB1','HOXD12','HRG','HRH3','HSFY1','HSFY2',
+  'HTN3','HTR1A','HTR2C','HTR3C','HTR3D','HTR3E','HTR5A','HTR6','IAPP','IFIT1B','IFNA10','IFNA14','IFNA16','IFNA17','IFNA2',
+  'IFNA21','IFNA4','IFNA5','IFNA6','IFNA7','IFNA8','IFNB1','IFNK','IFNW1','IL12B','IL13','IL17A','IL17F','IL1F10','IL21',
+  'IL22','IL25','IL26','IL28A','IL28B','IL29','IL3','IL31','IL36A','IL36B','IL36RN','IL9','INS','INSL5','INSL6',
+  'INSM2','INSRR','IQCF1','IRGC','ISX','ITIH6','IZUMO2','KCNA10','KCNB2','KCNG4','KCNK10','KCNK16','KCNK18','KCNV1','KHDC3L',
+  'KIF2B','KIR2DL1','KIR3DL3','KLK12','KLK9','KRT2','KRT25','KRT26','KRT28','KRT33A','KRT35','KRT36','KRT37','KRT38','KRT40',
+  'KRT71','KRT73','KRT74','KRT75','KRT76','KRT77','KRT78','KRT82','KRT84','KRT85','KRT86','KRT9','KRTAP1-1','KRTAP10-1','KRTAP10-10',
+  'KRTAP10-11','KRTAP10-12','KRTAP10-2','KRTAP10-4','KRTAP10-5','KRTAP10-6','KRTAP10-7','KRTAP10-8','KRTAP10-9','KRTAP11-1','KRTAP13-1','KRTAP13-2','KRTAP13-3','KRTAP13-4','KRTAP15-1',
+  'KRTAP17-1','KRTAP19-3','KRTAP23-1','KRTAP26-1','KRTAP3-2','KRTAP4-11','KRTAP4-12','KRTAP4-2','KRTAP4-4','KRTAP4-7','KRTAP5-2','KRTAP9-2','KRTAP9-3','KRTAP9-4','LALBA',
+  'LBX1','LCN9','LCT','LGALS13','LGALS14','LHFPL5','LHX3','LHX5','LIM2','LIN28A','LIPM','LOR','LRIT1','LRIT2','LRRC10',
+  'LUZP4','LYZL1','LYZL2','LYZL6','MAGEA10','MAGEA11','MAGEB1','MAGEB10','MAGEB18','MAGEB3','MAGEB4','MAGEC3','MAS1','MAS1L','MBD3L1',
+  'MBD3L2','MBL2','MC2R','MC3R','MC5R','MEP1A','MEP1B','MEPE','MFRP','MMD2','MMP20','MMP21','MMP26','MMP27','MOGAT3',
+  'MORC1','MRGPRD','MRGPRX1','MRGPRX2','MRGPRX4','MS4A10','MS4A13','MS4A5','MSGN1','MT1B','MTNR1B','MUC17','MUC7','MYBPC3','MYF5',
+  'NANOGNB','NANOS2','NCR2','NDST4','NEUROD2','NEUROD4','NEUROD6','NEUROG1','NKX2-1','NKX2-2','NLRP4','NLRP5','NLRP8','NLRP9','NMS',
+  'NOBOX','NOTO','NOX3','NPFFR1','NPHS2','NPSR1','NPVF','NR2E1','NYX','OC90','OLIG2','OLIG3','OPALIN','OPN1LW','OPN5',
+  'OR10A2','OR10A4','OR10A5','OR10H1','OR10H2','OR10H3','OR10J1','OR10R2','OR10S1','OR10X1','OR10Z1','OR11A1','OR12D2','OR12D3','OR13C3',
+  'OR13D1','OR14A16','OR1A1','OR1A2','OR1B1','OR1D2','OR1E1','OR1E2','OR1G1','OR1L6','OR1N2','OR1S1','OR1S2','OR2AK2','OR2AT4',
+  'OR2C1','OR2C3','OR2D2','OR2D3','OR2F1','OR2G2','OR2G3','OR2H1','OR2J2','OR2L3','OR2T1','OR2T10','OR2T12','OR2T2','OR2T27',
+  'OR2T33','OR2T4','OR2T5','OR2W1','OR3A1','OR3A2','OR3A3','OR4C11','OR4C3','OR4D1','OR4D10','OR4D11','OR4D9','OR4K17','OR51B6',
+  'OR51D1','OR51F2','OR51T1','OR51V1','OR52A1','OR52A5','OR52B2','OR52B6','OR52E8','OR52I2','OR52K2','OR52L1','OR52M1','OR52R1','OR52W1',
+  'OR56A1','OR56A4','OR56B1','OR5AU1','OR5C1','OR5I1','OR5M1','OR5M10','OR5P2','OR5P3','OR5R1','OR5T1','OR5T2','OR5T3','OR5V1',
+  'OR5W2','OR6A2','OR6K6','OR6S1','OR6V1','OR7A17','OR7C2','OR7D4','OR7G2','OR8A1','OR8B8','OR8G5','OR8U1','OR9Q2','OTOP1',
+  'OTOP3','OTOR','OTP','OTUD6A','OTX2','PAGE3','PANX3','PASD1','PAX1','PAX4','PBOV1','PDCL2','PDE6H','PDILT','PDX1',
+  'PDYN','PGK2','PGLYRP2','PGLYRP3','PIWIL1','PIWIL3','PKD1L3','PLA2G2E','PLA2G2F','PLA2G4E','PLAC1L','PNLIP','PNLIPRP1','PNLIPRP2','PNPLA5',
+  'POM121L12','POTEA','POTED','POTEG','POTEH','POU3F4','POU4F2','POU4F3','POU5F2','PPP3R2','PRAMEF1','PRAMEF19','PRAMEF2','PRAMEF3','PRAMEF4',
+  'PRAMEF7','PRB1','PRB4','PRDM13','PRDM14','PRDM7','PRDM9','PRG3','PRLH','PRLHR','PROP1','PRSS33','PRSS37','PRSS38','PRSS41',
+  'PRSS55','PRSS58','PRY2','PSKH2','PTF1A','RAX','RAX2','RBM46','RBMXL2','RBMY1A1','RBMY1B','RBMY1D','RBMY1E','RBMY1F','RBMY1J',
+  'RBP3','RBPJL','RD3','RDH8','REG3A','RESP18','RETNLB','REXO1L1','RFPL3','RFPL4B','RFX6','RHO','RHOXF2','RNASE10','RNASE11',
+  'RNASE12','RNASE13','RNASE8','RNASE9','RND2','RNF113B','RNF17','RP1','RP1L1','RPE65','RPTN','RS1','RTP1','RTP2','RXFP2',
+  'RXFP3','S100A7A','S100G','SAGE1','SAMD7','SCGB1D1','SCN10A','SCRT2','SDR9C7','SEC14L3','SEMG2','40069','SERPINA12','SERPINA7','SERPINA9',
+  'SERPINB12','SHCBP1L','SHOX','SI','SIGLECL1','SIX6','SLC10A2','SLC13A1','SLC17A2','SLC17A6','SLC18A3','SLC22A12','SLC22A13','SLC22A24','SLC22A25',
+  'SLC22A6','SLC22A8','SLC22A9','SLC25A2','SLC25A31','SLC2A2','SLC2A7','SLC32A1','SLC34A1','SLC36A3','SLC39A12','SLC6A18','SLC6A5','SLC6A7','SLC7A13',
+  'SLCO1B1','SLCO6A1','SLITRK1','SOHLH1','SOX1','SOX14','SP8','SPACA1','SPACA5','SPACA7','SPATA16','SPATA21','SPEM1','SPHAR','SPINK14',
+  'SPO11','SPPL2C','SPRR4','SSTR4','SSX3','SSX5','SSX7','SSX8','SSX9','STATH','SULT6B1','SUN5','T','TAAR1','TAAR2',
+  'TAAR5','TAAR6','TAAR8','TAAR9','TAS1R2','TAS2R1','TAS2R13','TAS2R16','TAS2R39','TAS2R40','TAS2R41','TAS2R42','TAS2R43','TAS2R46','TAS2R50',
+  'TAS2R60','TAS2R7','TAS2R8','TAS2R9','TBC1D21','TBC1D29','TBL1Y','TBPL2','TBR1','TBX10','TCEB3B','TCEB3C','TCHHL1','TCP10L2','TEDDM1',
+  'TEX101','TEX13A','TEX28','TEX34','TFAP2D','TFDP3','TGIF2LX','TGIF2LY','TGM6','TKTL2','TLX1','TMEM132D','TMEM174','TMEM207','TMEM225',
+  'TMIGD1','TMPRSS11A','TMPRSS11B','TMPRSS11F','TMPRSS12','TMPRSS15','TNR','TPD52L3','TPH2','TPRX1','TPTE','TREML4','TRHR','TRIM40','TRIM42',
+  'TRIM43','TRIM48','TRIM49','TRIM51','TRIM60','TRIM67','TRIML1','TRPC5','TRPC7','TRPM1','TRPV5','TSGA13','TSHB','TSPAN16','TSPO2',
+  'TSPY1','TSPYL6','TSSK1B','TSSK2','TXNDC8','TYR','UBQLN3','UMOD','UROC1','USP17L2','USP26','USP29','UTS2R','VAX1','VCX3A',
+  'VHLL','VN1R2','VN1R4','VN1R5','VPREB1','VRTN','VSX2','WFDC10A','WFDC11','WFDC9','XAGE2','XAGE5','XKR7','ZAN','ZCCHC13',
+  'ZCCHC16','ZG16','ZIC3','ZIM3','ZNF645','ZNF648','ZNF679','ZNF804B','ZNRF4','ZP2','ZP4','ZSWIM2')
+```
+
+
+
+
+

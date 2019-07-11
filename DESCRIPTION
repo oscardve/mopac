@@ -1,0 +1,23 @@
+Package: MoPAC
+Type: Package
+Title: Modular Pipeline for the Analysis of CRISPR screens
+Version: 0.2.0
+Author: Oscar D Villarreal and Han Xu
+Maintainer: Oscar D Villarreal <oscardvillarreal@gmail.com>
+Depends: R (>= 2.10)
+Description: The Modular Pipeline for the Analysis of CRISPR screens generates unbiased essentiality and differential essentiality gene scores from FASTQ files of high-throughput functional pooled screens as well as from either raw or normalized tables of read counts.
+License: GPL (>= 2)
+Encoding: UTF-8
+LazyData: true
+LinkingTo: Rcpp
+Imports: Rcpp, plyr, gtools, stringr, openxlsx, tensorA, ineq,
+        reshape2, graphics, ggplot2, gplots, ggrepel, grDevices,
+        gridExtra, knitr, rmarkdown, shiny, shinyBS, shinythemes,
+        shinyFiles, DT, visNetwork, sqldf, rhandsontable, neat, igraph
+Suggests: STRINGdb, plotly
+RoxygenNote: 6.1.1
+SystemRequirements: C++11 and pandoc
+        (http://pandoc.org/installing.html) for pdf and html report
+        generation.
+NeedsCompilation: yes
+Packaged: 2019-06-07 02:00:36 UTC; oz

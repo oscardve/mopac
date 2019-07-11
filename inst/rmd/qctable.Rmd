@@ -1,0 +1,168 @@
+---
+title: "Quality Control"
+author: MoPAC
+output:
+  beamer_presentation:
+    toc: true
+    slide_level: 3
+    dev: png
+fontsize: 8pt
+theme: "Frankfurt"
+highlight: tango
+params:
+  annotation: 0
+  annotation1: 0
+  pseudo: 0
+  counts: 0
+  logged: 0
+  sgRNA_reps: 0
+  sgRNA: 0
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE,eval=FALSE,message=FALSE,warning=FALSE,results='hide')
+```
+
+```{r input,eval=TRUE}
+annotation <- params$annotation
+annotation1 <- params$annotation1
+
+pseudo <- params$pseudo
+# weights <- params$weights
+# scaling <- params$scaling
+# shifting <- params$shifting
+
+counts <- params$counts
+logged <- params$logged
+sgRNA_reps <- params$sgRNA_reps
+sgRNA <- params$sgRNA
+# gene <- params$gene
+
+if(!"Category"%in%colnames(counts))
+  counts$Category <- logged$Category <- sgRNA_reps$Category <- sgRNA$Category <- "Other"
+
+library <- counts[,c("sgRNA","Gene","Category")]
+counts_mat <- as.matrix(counts[,sapply(counts,is.numeric),drop=FALSE])
+rownames(counts_mat) <- counts$sgRNA
+logged_mat <- as.matrix(logged[,sapply(logged,is.numeric),drop=FALSE])
+rownames(logged_mat) <- logged$sgRNA
+sgRNA_reps_mat <- as.matrix(sgRNA_reps[,sapply(sgRNA_reps,is.numeric),drop=FALSE])
+rownames(sgRNA_reps_mat) <- sgRNA_reps$sgRNA
+sgRNA_mat <- as.matrix(sgRNA[,sapply(sgRNA,is.numeric),drop=FALSE])
+rownames(sgRNA_mat) <- sgRNA$sgRNA
+# gene_mat <- as.matrix(gene[,sapply(gene,is.numeric),drop=FALSE])
+# rownames(gene_mat) <- gene$Gene
+```
+
+# Raw counts
+
+### Number of core essentials / nonessentials
+```{r classification,eval=TRUE}
+plot.classification(library,counts_mat)
+```
+
+### Gene sizes
+```{r sizes,eval=TRUE}
+plot.sizes(library, counts_mat)
+```
+
+### Sequencing depth
+```{r depths,eval=TRUE}
+plot.depths(counts, annotation)
+```
+
+### Zero counts per category
+```{r zeros,eval=TRUE}
+plot.zeros(counts, annotation)
+```
+
+<!-- ### Cumulative distributions -->
+```{r cumulative,eval=FALSE}
+plot.cumulative(counts_mat, annotation)
+```
+
+# Normalized counts
+
+### Pseudocount optimization
+```{r pseudocount,eval=TRUE}
+if(!is.null(pseudo)) plot.pseudocount(pseudo)
+```
+
+<!-- ### Preliminary sgRNA rank weights from unfiltered controls -->
+```{r weights,eval=FALSE}
+plot.weights(weights)
+```
+
+<!-- ### Preliminary sgRNA sample scaling factors from unfiltered controls -->
+```{r scaling,eval=FALSE}
+plot.scaling(scaling)
+```
+
+<!-- ### Preliminary sgRNA sample shifting factors from unfiltered controls -->
+```{r shifting,eval=FALSE}
+plot.shifting(shifting)
+```
+
+### Distributions
+```{r distributions,eval=TRUE}
+plot.distributions(logged,annotation, "Condition~Replicate")
+```
+
+# Fold changes
+
+### Pearson correlations
+```{r correlations,eval=TRUE}
+if(ncol(sgRNA_reps_mat)>1) plot.correlation(sgRNA_reps_mat)
+```
+
+### Principal component analysis
+```{r pca,eval=TRUE}
+if(ncol(sgRNA_reps_mat)>2) {
+  tmp1 <- sgRNA_reps_mat
+  pca_sample <- stats::prcomp(t(tmp1),scale=F)
+  pca <- data.frame(Z1=pca_sample$x[,1],Z2=pca_sample$x[,2],Z3=pca_sample$x[,3],Sample=colnames(tmp1))
+  plot.pca(pca)
+}
+```
+
+### Principal component analysis: Proportion of variance explained
+```{r pve,eval=TRUE}
+if(ncol(sgRNA_reps_mat)>2) {
+  pve_sample <- 100*pca_sample$sdev^2/sum(pca_sample$sdev^2)
+  plot.pve(pve_sample)
+}
+```
+
+### Reproducibility in first condition
+```{r reproducibility_1,eval=TRUE}
+if(ncol(sgRNA_reps_mat)>1) {
+  conditions <- unique(annotation1$Condition)
+  annotation2 <- annotation1[annotation1$Condition==conditions[1],]
+  grp <- split(annotation2$Sample,annotation2[c("Condition")],drop=TRUE)
+  plot.reproducibility(sgRNA_reps[,c("Category",as.character(grp[[1]]))],names(grp)[1])
+}
+```
+
+### Reproducibility in second condition
+```{r reproducibility_2,eval=TRUE}
+if(ncol(sgRNA_reps_mat)>1) {
+  annotation2 <- annotation1[annotation1$Condition==conditions[2],]
+  grp <- split(annotation2$Sample,annotation2[c("Condition")],drop=TRUE)
+  plot.reproducibility(sgRNA_reps[,c("Category",as.character(grp[[1]]))],names(grp)[1])
+}
+```
+
+# Replicate-averaged fold changes
+
+### Distributions at the sgRNA level
+```{r folds_sgRNA,eval=TRUE}
+# annotationAve <- unique(annotation1[,c("Sample","Condition"),drop=F])
+# annotationAve$Sample <- paste0(annotationAve$Cell_line,".",annotationAve$Treatment,".",annotationAve$Timepoint)
+plot.folds(sgRNA, "~Sample",level="sgRNA")
+```
+
+<!-- ### Distributions at the gene level -->
+```{r folds_gene,eval=FALSE}
+# plot.folds(gene, annotationAve, "Cell_line+Treatment~Timepoint",level="Gene")
+```
+

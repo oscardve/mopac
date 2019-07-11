@@ -1,0 +1,48 @@
+---
+output:
+  md_document:
+    variant: markdown_github
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, echo = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "README-"
+)
+```
+
+# MoPAC
+
+The Modular Pipeline for the Analysis of CRISPR screens generates unbiased essentiality and differential essentiality gene scores from FASTQ files of high-throughput functional pooled screens as well as from either raw or normalized tables of read counts.
+
+# Installation
+
+```{r installation}
+# Required R packages:
+install.packages(c("Rcpp","gtools","stringr","openxlsx","tensorA","ineq","reshape2","plyr","ggplot2","gplots","ggrepel","gridExtra","knitr","rmarkdown","shiny","shinyBS","shinythemes","shinyFiles","DT","visNetwork","sqldf","rhandsontable","neat"))
+
+# Optional R packages:
+install.packages("plotly")
+source("https://bioconductor.org/biocLite.R")
+biocLite("STRINGdb")
+
+# These optional packages might require additional software in order to be installed:
+sudo yum install libpng-devel
+sudo yum install openssl-devel
+sudo yum install libcurl-devel
+
+# Optional software for pdf rendering (Rstudio already comes with pandoc installed so this is only necessary outside Rstudio):
+sudo yum install pandoc
+
+# Install MoPAC:
+install.packages('MoPAC_0.1.0.tar.gz',repos=NULL,type='source')
+```
+
+# Starting the GUI interface
+
+```{r example}
+run.MoPAC()
+```
